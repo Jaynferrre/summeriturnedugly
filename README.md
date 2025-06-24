@@ -1,2 +1,2 @@
-# The Summer I Turned Ugly
-Summer School WnCC Submission
+# Summer School WnCC Submission
+Week 2 Assignment Submission 
