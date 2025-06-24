@@ -2,7 +2,7 @@
 
 ## Week 2 Assignment
 
-This repository contains my Week 2 submission for the WnCC Summer School: **Machine Learning & Data Science** track.
+This repository contains my Week 2 submission for WnCC's Introduction to Machine Learning and NLP Summer School
 
 ###  Problem 1 — SMS Spam Classification
 - **Model**: Logistic Regression
