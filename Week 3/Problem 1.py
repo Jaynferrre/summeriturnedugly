@@ -1,80 +1,62 @@
-from transformers import TrainingArguments
-print(TrainingArguments.__module__)
-
-import os
 import torch
-import numpy as np
+from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    Trainer,
-    TrainingArguments,
-    pipeline
-)
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from torch.optim import AdamW
 from sklearn.metrics import accuracy_score, f1_score
+from tqdm import tqdm
 
-torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {torch_device}")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-imdb_raw_dataset = load_dataset("imdb")
+dataset = load_dataset("imdb")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-bert_model_name = "bert-base-uncased"
-bert_tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
-bert_sequence_classifier_model = AutoModelForSequenceClassification.from_pretrained(bert_model_name, num_labels=2).to(torch_device)
+def tokenize(example):
+    return tokenizer(example["text"], padding="max_length", truncation=True, max_length=512)
 
-def imdb_tokenize_example(example):
-    return bert_tokenizer(example["text"], padding="max_length", truncation=True, max_length=512)
+tokenized = dataset.map(tokenize, batched=True)
+tokenized.set_format("torch", columns=["input_ids", "attention_mask", "label"])
 
-imdb_tokenized_dataset = imdb_raw_dataset.map(imdb_tokenize_example, batched=True)
-imdb_tokenized_dataset = imdb_tokenized_dataset.remove_columns(["text"])
-imdb_tokenized_dataset.set_format("torch")
+train_loader = DataLoader(tokenized["train"].select(range(2000)), batch_size=8, shuffle=True)
+test_loader = DataLoader(tokenized["test"].select(range(1000)), batch_size=8)
 
-def imdb_compute_metrics(pred):
-    predicted_labels = np.argmax(pred.predictions, axis=1)
-    true_labels = pred.label_ids
-    accuracy = accuracy_score(true_labels, predicted_labels)
-    f1 = f1_score(true_labels, predicted_labels)
-    return {"accuracy": accuracy, "f1": f1}
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2).to(device)
+optimizer = AdamW(model.parameters(), lr=2e-5)
 
-imdb_training_args = TrainingArguments(
-    output_dir="./bert_imdb_results",
-    evaluation_strategy="epoch",
-    logging_strategy="epoch",
-    learning_rate=2e-5,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
-    num_train_epochs=2,
-    save_strategy="epoch",
-    logging_dir="./logs",
-    logging_steps=500,
-    load_best_model_at_end=True,
-    metric_for_best_model="f1"
-)
+model.train()
+for epoch in range(2):
+    loop = tqdm(train_loader, leave=True)
+    for batch in loop:
+        optimizer.zero_grad()
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        labels = batch["label"].to(device)
+        outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+        loss = outputs.loss
+        loss.backward()
+        optimizer.step()
+        loop.set_description(f"Epoch {epoch+1}")
+        loop.set_postfix(loss=loss.item())
 
-imdb_trainer = Trainer(
-    model=bert_sequence_classifier_model,
-    args=imdb_training_args,
-    train_dataset=imdb_tokenized_dataset["train"].shuffle(seed=42).select(range(2000)),
-    eval_dataset=imdb_tokenized_dataset["test"].select(range(1000)),
-    compute_metrics=imdb_compute_metrics
-)
+model.eval()
+all_preds, all_labels = [], []
+with torch.no_grad():
+    for batch in test_loader:
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        labels = batch["label"].to(device)
+        outputs = model(input_ids, attention_mask=attention_mask)
+        preds = torch.argmax(outputs.logits, dim=1)
+        all_preds.extend(preds.cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())
 
-imdb_trainer.train()
+print("Accuracy:", accuracy_score(all_labels, all_preds))
+print("F1 Score:", f1_score(all_labels, all_preds))
 
-imdb_eval_results = imdb_trainer.evaluate()
-print("Evaluation Results:", imdb_eval_results)
+from transformers import pipeline
 
-imdb_model_save_path = "./bert_finetuned_imdb"
-bert_sequence_classifier_model.save_pretrained(imdb_model_save_path)
-bert_tokenizer.save_pretrained(imdb_model_save_path)
-print(f"Model saved to {imdb_model_save_path}")
+sentiment_pipeline = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
+text = "I absolutely loved the movie! It was fantastic."
+print("Prediction:", sentiment_pipeline(text))
 
-print("\n--- Sample Inference ---")
-imdb_loaded_model = AutoModelForSequenceClassification.from_pretrained(imdb_model_save_path).to(torch_device)
-imdb_loaded_tokenizer = AutoTokenizer.from_pretrained(imdb_model_save_path)
-imdb_sentiment_pipeline = pipeline("sentiment-analysis", model=imdb_loaded_model, tokenizer=imdb_loaded_tokenizer, device=0 if torch.cuda.is_available() else -1)
 
-imdb_sample_review_text = "I absolutely loved the movie! It was fantastic."
-print(f"Text: {imdb_sample_review_text}")
-print("Prediction:", imdb_sentiment_pipeline(imdb_sample_review_text))
