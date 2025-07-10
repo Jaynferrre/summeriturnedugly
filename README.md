@@ -19,11 +19,11 @@ This repository contains my Week 2 submission for WnCC's Introduction to Machine
 - `nltk`, `gensim`, `scikit-learn`, `pandas`, `numpy`, `contractions`
 
 
-# Week 3: Sentiment Analysis with BERT using Hugging Face Transformers
+## Week 3: Sentiment Analysis with BERT using Hugging Face Transformers
 
 This project implements a machine learning pipeline to perform sentiment analysis on the IMDb dataset using Hugging Face's `transformers` and `datasets` libraries. The model is a fine-tuned `bert-base-uncased` transformer for binary classification (positive or negative review).
 
-## Pipeline Components
+### Pipeline Components
 
 - **Dataset Loading**: IMDb dataset from the Hugging Face `datasets` library.
 - **Preprocessing**: Tokenization using the BERT tokenizer with padding, truncation, and max length 512.
