@@ -1,0 +1,7 @@
+{
+  "model_name": "gpt2",
+  "block_size": 128,
+  "batch_size": 4,
+  "epochs": 3,
+  "lr": 2e-5
+}
