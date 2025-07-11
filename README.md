@@ -55,5 +55,5 @@ This project implements a transformer-based language model using GPT-2, fine-tun
 
 - **Perplexity**: Measures the uncertainty of the model in predicting the next word.
 - **Top-k Accuracy**: Percentage of times the correct next word was among the top-k predictions (k=5 in this case).
->>>>>>> ad023c5 (Initial commit: Fine-tuned GPT-2 for next-word prediction)
+
 
